@@ -20,6 +20,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -39,6 +40,8 @@ import org.opencv.core.Mat;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 // 2.28.2022 start: add lib for wifi p2p connection
 import android.content.BroadcastReceiver;
@@ -54,6 +57,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import com.martin.ads.connection.DeviceAdapter;
 import com.martin.ads.connection.DirectActionListener;
 import com.martin.ads.connection.WifiClientTask;
 import com.martin.ads.connection.WifiServerService;
@@ -69,7 +73,10 @@ public class ArCamUIActivity extends AppCompatActivity implements
     private WifiP2pInfo wifiP2pInfo;
     private boolean connectionInfoAvailable;
 
+    private DeviceAdapter deviceAdapter;
+
     private List<WifiP2pDevice> wifiP2pDeviceList;
+
 
     private BroadcastReceiver broadcastReceiver;
 
@@ -82,6 +89,8 @@ public class ArCamUIActivity extends AppCompatActivity implements
     // 3.3.3033 end for sender
 
     private static final int ADD_AR_OBJ = 1;
+
+    private int device_idx;
 
     private final DirectActionListener directActionListener = new DirectActionListener() {
 
@@ -101,6 +110,9 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 // for sender
                 wifiP2pDeviceList.clear();
                 ArCamUIActivity.this.wifiP2pInfo = wifiP2pInfo;
+
+                // sender 3.8.2022
+                deviceAdapter.notifyDataSetChanged();
 
                 // for server: receiver
                 /*
@@ -122,6 +134,9 @@ public class ArCamUIActivity extends AppCompatActivity implements
             // sender:
             wifiP2pDeviceList.clear();
             ArCamUIActivity.this.wifiP2pInfo = null;
+
+            // 3.8.2022
+            deviceAdapter.notifyDataSetChanged();
         }
 
         @Override
@@ -135,12 +150,8 @@ public class ArCamUIActivity extends AppCompatActivity implements
             ArCamUIActivity.this.wifiP2pDeviceList.clear();
             ArCamUIActivity.this.wifiP2pDeviceList.addAll(wifiP2pDeviceList);
 
-            if(ArCamUIActivity.this.wifiP2pDeviceList.size() > 1) {
-                // set connect() with mWifiP2pDevice
-                // for test, we always set mWifiP2pDevice with the first device in list
-                mWifiP2pDevice = ArCamUIActivity.this.wifiP2pDeviceList.get(0);
-                connect();
-            }
+            // sender 3.8.2022
+            deviceAdapter.notifyDataSetChanged();
         }
     };
 
@@ -167,6 +178,9 @@ public class ArCamUIActivity extends AppCompatActivity implements
         super.onCreate(savedInstanceState);
         setContentView(R.layout.ar_ui_content);
         initToolbar();
+
+        // 3.3.2022: for test, always set the connection with first device
+
         initView();
 
         // 2.28.2022 build wifi p2p connection start
@@ -185,9 +199,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
         if (wifiServerService != null) {
             new Intent(this, WifiServerService.class);
         }
-
-        // 3.3.2022: for test, always set the connection with first device
-        wifiP2pDeviceList = new ArrayList<>();
 
         // 2.28.2022 end
     }
@@ -257,6 +268,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
             case R.id.menuDirectDiscover:
                 Toast.makeText(this, "Searching peers...", Toast.LENGTH_SHORT).show();
                 wifiP2pDeviceList.clear();
+                deviceAdapter.notifyDataSetChanged();
                 if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                     Toast.makeText(ArCamUIActivity.this, "Need Permission on DirectDiscover", Toast.LENGTH_SHORT).show();
                     return true;
@@ -336,6 +348,34 @@ public class ArCamUIActivity extends AppCompatActivity implements
         fpsText = findViewById(R.id.text_fps);
         mFpsMeter = new FpsMeter();
         mFpsMeter.setResolution(GlobalConstant.RESOLUTION_WIDTH, GlobalConstant.RESOLUTION_HEIGHT);
+
+        // 3.8.2022 set recycle view
+        RecyclerView rv_deviceList = findViewById(R.id.rv_deviceList);
+        wifiP2pDeviceList = new ArrayList<>();
+        deviceAdapter = new DeviceAdapter(wifiP2pDeviceList);
+
+
+        rv_deviceList.setAdapter(deviceAdapter);
+        rv_deviceList.setLayoutManager(new LinearLayoutManager(this));
+
+        // 3.10.2022 test if button click
+        // test button show device list 1_st item
+        Button test_button = (Button) findViewById(R.id.test_button);
+        test_button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(wifiP2pDeviceList.size() > 0) {
+                    mWifiP2pDevice = wifiP2pDeviceList.get(device_idx);
+                    Toast.makeText(ArCamUIActivity.this, "device: "+mWifiP2pDevice.deviceName, Toast.LENGTH_SHORT).show();
+                    device_idx = (device_idx + 1) % wifiP2pDeviceList.size();
+                } else {
+                    Toast.makeText(ArCamUIActivity.this, "no peer device", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        Button connect_button = (Button) findViewById(R.id.connect_button);
+        connect_button.setOnClickListener(v -> connect());
     }
 
     private void initGLES10Demo() {
@@ -374,12 +414,15 @@ public class ArCamUIActivity extends AppCompatActivity implements
                         .setArObjectView(glRootView)
                         .setNativeHelper(nativeHelper)
                         .setContext(this)
+                        /*
                         .setObjPath("patrick.obj")
                         .setTexturePath("Char_Patrick.png")
                         .setInitSize(0.20f)
-//                        .setObjPath("andy.obj")
-//                        .setTexturePath("andy.png")
-//                        .setInitSize(1.0f)
+
+                         */
+                        .setObjPath("andy.obj")
+                        .setTexturePath("andy.png")
+                        .setInitSize(1.0f)
                         .init(touchHelper);
         nativeHelper.addOnMVPUpdatedCallback(objRendererWrapper);
     }
@@ -510,5 +553,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
         }
 
     }
+
     // 3.3.2022 end
 }

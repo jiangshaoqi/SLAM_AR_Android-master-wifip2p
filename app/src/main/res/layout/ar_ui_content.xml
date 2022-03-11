@@ -25,6 +25,28 @@
         android:paddingTop="10dp"
         android:paddingStart="30dp"/>
 
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/rv_deviceList"
+        android:id="@+id/test_button"
+        android:text="mDevice" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/test_button"
+        android:id="@+id/connect_button"
+        android:text="connectDevice" />
+
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_deviceList"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/text_fps"/>
+
     <!--<com.martin.ads.rendering.gles.GLRootView-->
         <!--android:id="@+id/ar_object_view_gles2_sphere"-->
         <!--android:layout_width="match_parent"-->
@@ -36,11 +58,11 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         />
+
     <View
         android:id="@+id/touch_panel"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        />
+        android:layout_height="match_parent" />
     <include layout="@layout/toolbar" />
 
 </RelativeLayout>
