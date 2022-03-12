@@ -3,6 +3,7 @@ package com.martin.ads.connection;
 import android.content.Context;
 import android.os.AsyncTask;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
@@ -48,6 +49,9 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                 socket = null;
                 outputStream = null;
                 objectOutputStream = null;
+
+                Toast.makeText(context, "notify success", Toast.LENGTH_SHORT).show();
+
                 return true;
             }
 

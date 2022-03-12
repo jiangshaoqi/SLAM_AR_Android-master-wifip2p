@@ -108,21 +108,19 @@ public class ArCamUIActivity extends AppCompatActivity implements
         public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
             if (wifiP2pInfo.groupFormed) {
                 // for sender
-                wifiP2pDeviceList.clear();
-                ArCamUIActivity.this.wifiP2pInfo = wifiP2pInfo;
+                // wifiP2pDeviceList.clear();
 
                 // sender 3.8.2022
-                deviceAdapter.notifyDataSetChanged();
+                // deviceAdapter.notifyDataSetChanged();
 
-                // for server: receiver
-                /*
-                connectionInfoAvailable = true;
-                if (wifiServerService != null) {
-                    new Intent(ArCamUIActivity.this, WifiServerService.class);
+                if(wifiP2pInfo.isGroupOwner) {
+                    connectionInfoAvailable = true;
+                    if (wifiServerService != null) {
+                        startService(new Intent(ArCamUIActivity.this, WifiServerService.class));
+                    }
+                } else {
+                    ArCamUIActivity.this.wifiP2pInfo = wifiP2pInfo;
                 }
-
-                The receiver part will go to onCreate
-                 */
             }
         }
 
@@ -194,13 +192,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
         registerReceiver(broadcastReceiver, WifiDirectBroadcastReceiver.getIntentFilter());
         bindService();
 
-        // start up server service, it originate from onConnectionInfoAvailable()
-        connectionInfoAvailable = true;
-        if (wifiServerService != null) {
-            new Intent(this, WifiServerService.class);
-        }
-
-        // 2.28.2022 end
     }
 
     // 2.28.2022 start
