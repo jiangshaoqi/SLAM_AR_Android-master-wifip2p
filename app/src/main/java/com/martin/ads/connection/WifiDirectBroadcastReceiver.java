@@ -58,6 +58,7 @@ public class WifiDirectBroadcastReceiver extends BroadcastReceiver {
                     mWifiP2pManager.requestConnectionInfo(mChannel, new WifiP2pManager.ConnectionInfoListener() {
                         @Override
                         public void onConnectionInfoAvailable(WifiP2pInfo info) {
+                            Log.e(TAG, "p2p connection info available");
                             mDirectActionListener.onConnectionInfoAvailable(info);
                         }
                     });

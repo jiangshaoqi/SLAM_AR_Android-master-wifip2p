@@ -92,6 +92,23 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
     private int device_idx;
 
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            WifiServerService.WifiServerBinder binder = (WifiServerService.WifiServerBinder) service;
+            wifiServerService = binder.getService();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            if (wifiServerService != null) {
+                wifiServerService = null;
+            }
+            bindService();
+        }
+    };
+
     private final DirectActionListener directActionListener = new DirectActionListener() {
 
         @Override
@@ -114,11 +131,14 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 // deviceAdapter.notifyDataSetChanged();
 
                 if(wifiP2pInfo.isGroupOwner) {
+                    Log.e(TAG, "p2p receiver group owner");
+                    Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
                     connectionInfoAvailable = true;
                     if (wifiServerService != null) {
                         startService(new Intent(ArCamUIActivity.this, WifiServerService.class));
                     }
                 } else {
+                    Log.e(TAG, "p2p receiver not group owner");
                     ArCamUIActivity.this.wifiP2pInfo = wifiP2pInfo;
                 }
             }
@@ -153,22 +173,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
         }
     };
 
-    private final ServiceConnection serviceConnection = new ServiceConnection() {
-
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            WifiServerService.WifiServerBinder binder = (WifiServerService.WifiServerBinder) service;
-            wifiServerService = binder.getService();
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            if (wifiServerService != null) {
-                wifiServerService = null;
-            }
-            bindService();
-        }
-    };
     // 2.28.2022 end
 
     @Override
@@ -232,11 +236,13 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 detectPlane = true;
                 // 3.4.2022 start: notify peers that device adding AR obj
                 if (wifiP2pInfo != null) {
+                    Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
                     new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress());
+                } else {
+                    Toast.makeText(this, "wifiP2pInfo is null", Toast.LENGTH_SHORT).show();
                 }
                 // 3.4.2022 end
                 break;
-
 
             case R.id.menuCreateGroup:
                 Toast.makeText(this, "Create group...", Toast.LENGTH_SHORT).show();
@@ -246,7 +252,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 wifiP2pManager.createGroup(channel, new WifiP2pManager.ActionListener() {
                     @Override
                     public void onSuccess() {
-                        Toast.makeText(ArCamUIActivity.this, "Create group success", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(ArCamUIActivity.this, "Create group success:", Toast.LENGTH_SHORT).show();
                     }
 
                     @Override
@@ -541,6 +547,8 @@ public class ArCamUIActivity extends AppCompatActivity implements
                             Toast.makeText(ArCamUIActivity.this, "connect fail", Toast.LENGTH_SHORT).show();
                         }
                     });
+        } else {
+            Toast.makeText(ArCamUIActivity.this, "no connection", Toast.LENGTH_SHORT).show();
         }
 
     }

@@ -5,10 +5,12 @@ import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
-import java.io.FileOutputStream;
+// import java.io.FileOutputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -26,11 +28,12 @@ public class WifiServerService extends IntentService {
 
     private InputStream inputStream;
 
-    private ObjectInputStream objectInputStream;
+    // private ObjectInputStream objectInputStream;
+    private DataInputStream dataInputStream;
 
-    private FileOutputStream fileOutputStream;
+    // private FileOutputStream fileOutputStream;
 
-    private static final int PORT = 594;
+    private static final int PORT = 1995;
     private static final int ADD_AR_OBJ = 1;
 
     public WifiServerService() {
@@ -54,8 +57,8 @@ public class WifiServerService extends IntentService {
             Socket client = serverSocket.accept();
             Log.e(TAG, "client address : " + client.getInetAddress().getHostAddress());
             inputStream = client.getInputStream();
-            objectInputStream = new ObjectInputStream(inputStream);
-            aim = objectInputStream.readInt();
+            dataInputStream = new DataInputStream(inputStream);
+            aim = dataInputStream.readInt();
             if(aim == ADD_AR_OBJ) {
                 // this host notice that a peer is adding an AR object
                 // 3.3.2022 only test, need more action
@@ -63,16 +66,16 @@ public class WifiServerService extends IntentService {
             }
             serverSocket.close();
             inputStream.close();
-            objectInputStream.close();
+            dataInputStream.close();
             serverSocket = null;
             inputStream = null;
-            objectInputStream = null;
+            dataInputStream = null;
 
         } catch (Exception e) {
             Log.e(TAG, "receive file Exception: " + e.getMessage());
         } finally {
             clean();
-
+            startService(new Intent(this, WifiServerService.class));
         }
     }
 
@@ -100,14 +103,15 @@ public class WifiServerService extends IntentService {
                 e.printStackTrace();
             }
         }
-        if (objectInputStream != null) {
+        if (dataInputStream != null) {
             try {
-                objectInputStream.close();
-                objectInputStream = null;
+                dataInputStream.close();
+                dataInputStream = null;
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+        /*
         if (fileOutputStream != null) {
             try {
                 fileOutputStream.close();
@@ -116,6 +120,8 @@ public class WifiServerService extends IntentService {
                 e.printStackTrace();
             }
         }
+
+        */
     }
 
 
