@@ -1,9 +1,16 @@
 package com.martin.ads.connection;
 
+import static com.martin.ads.connection.MatUtil.matToJson;
+
+
 import android.content.Context;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.util.Log;
-import android.widget.Toast;
+
+import androidx.annotation.RequiresApi;
+
+import org.opencv.core.Mat;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -28,14 +35,19 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
         this.aim = aim;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected Boolean doInBackground(Object... params) {
         Socket socket = null;
         OutputStream outputStream = null;
-        DataOutputStream dataOutputStream = null;
-        // ObjectOutputStream objectOutputStream = null;
+        // DataOutputStream dataOutputStream = null;
+        ObjectOutputStream objectOutputStream = null;
         try {
             String hostAddress = params[0].toString();
+            Mat Rgba = (Mat) params[1];
+            Log.e(TAG, "mat type "+Integer.toString(Rgba.type()));
+
+            String matString = matToJson(Rgba);
 
             // send notification of AR obj adding
             if(aim == ADD_AR_OBJ) {
@@ -43,15 +55,20 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                 socket.bind(null);
                 socket.connect((new InetSocketAddress(hostAddress, RECV_PORT)), 10000);
                 outputStream = socket.getOutputStream();
-                dataOutputStream = new DataOutputStream(outputStream);
-                dataOutputStream.writeInt(ADD_AR_OBJ);
+                // dataOutputStream = new DataOutputStream(outputStream);
+                // dataOutputStream.writeInt(ADD_AR_OBJ);
+                objectOutputStream = new ObjectOutputStream(outputStream);
+                objectOutputStream.writeObject(matString);
 
                 socket.close();
                 outputStream.close();
-                dataOutputStream.close();
+                // dataOutputStream.close();
+                objectOutputStream.close();
+
                 socket = null;
                 outputStream = null;
-                dataOutputStream = null;
+                // dataOutputStream = null;
+                objectOutputStream = null;
 
                 Log.e(TAG, "client send obj notification");
 
@@ -75,9 +92,9 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                     e.printStackTrace();
                 }
             }
-            if (dataOutputStream != null) {
+            if (objectOutputStream != null) {
                 try {
-                    dataOutputStream.close();
+                    objectOutputStream.close();
                 } catch (IOException e) {
                     e.printStackTrace();
                 }

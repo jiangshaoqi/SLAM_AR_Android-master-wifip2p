@@ -1,15 +1,21 @@
 package com.martin.ads.connection;
 
+import static com.martin.ads.connection.MatUtil.matFromJson;
+
 import android.app.IntentService;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 // import java.io.FileOutputStream;
+import org.opencv.core.Mat;
+
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,8 +34,8 @@ public class WifiServerService extends IntentService {
 
     private InputStream inputStream;
 
-    // private ObjectInputStream objectInputStream;
-    private DataInputStream dataInputStream;
+    private ObjectInputStream objectInputStream;
+    // private DataInputStream dataInputStream;
 
     // private FileOutputStream fileOutputStream;
 
@@ -46,10 +52,13 @@ public class WifiServerService extends IntentService {
         return new WifiServerBinder();
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onHandleIntent(Intent intent) {
         clean();
-        int aim;
+        // int aim;
+        Mat Rgba;
+        String matString;
         try {
             serverSocket = new ServerSocket();
             serverSocket.setReuseAddress(true);
@@ -57,19 +66,27 @@ public class WifiServerService extends IntentService {
             Socket client = serverSocket.accept();
             Log.e(TAG, "client address : " + client.getInetAddress().getHostAddress());
             inputStream = client.getInputStream();
-            dataInputStream = new DataInputStream(inputStream);
-            aim = dataInputStream.readInt();
-            if(aim == ADD_AR_OBJ) {
+            // dataInputStream = new DataInputStream(inputStream);
+            objectInputStream = new ObjectInputStream(inputStream);
+
+            //aim = dataInputStream.readInt();
+            matString = (String) objectInputStream.readObject();
+
+            if(matString != null) {
                 // this host notice that a peer is adding an AR object
                 // 3.3.2022 only test, need more action
-                Log.e(TAG, "AR object is added by peer");
+                Rgba = matFromJson(matString);
+                Log.e(TAG, "Receive the Processed frame");
             }
             serverSocket.close();
             inputStream.close();
-            dataInputStream.close();
+            // dataInputStream.close();
+            objectInputStream.close();
+
             serverSocket = null;
             inputStream = null;
-            dataInputStream = null;
+            // dataInputStream = null;
+            objectInputStream = null;
 
         } catch (Exception e) {
             Log.e(TAG, "receive file Exception: " + e.getMessage());
@@ -103,10 +120,10 @@ public class WifiServerService extends IntentService {
                 e.printStackTrace();
             }
         }
-        if (dataInputStream != null) {
+        if (objectInputStream != null) {
             try {
-                dataInputStream.close();
-                dataInputStream = null;
+                objectInputStream.close();
+                objectInputStream = null;
             } catch (IOException e) {
                 e.printStackTrace();
             }

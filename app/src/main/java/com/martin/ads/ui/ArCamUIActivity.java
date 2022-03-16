@@ -237,7 +237,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 // 3.4.2022 start: notify peers that device adding AR obj
                 if (wifiP2pInfo != null) {
                     Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
-                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress());
+                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba);
                 } else {
                     Toast.makeText(this, "wifiP2pInfo is null", Toast.LENGTH_SHORT).show();
                 }
@@ -296,6 +296,10 @@ public class ArCamUIActivity extends AppCompatActivity implements
     private Mat mRgba;
     private Mat                    mIntermediateMat;
     private Mat                    mGray;
+
+    // 3.15.2022 start
+
+    // 3.15.2022 end
 
     private CameraGLView mOpenCvCameraView;
     private boolean initFinished;

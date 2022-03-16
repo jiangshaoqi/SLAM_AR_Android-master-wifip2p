@@ -82,4 +82,6 @@ dependencies {
     implementation 'de.javagl:obj:0.3.0'
     testCompile 'junit:junit:4.12'
     implementation project(':OpenCVLibrary450')
+
+    implementation 'com.google.code.gson:gson:2.8.8' // Old 2.8.6
 }
