@@ -45,9 +45,11 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
         try {
             String hostAddress = params[0].toString();
             Mat Rgba = (Mat) params[1];
+            Mat gray = (Mat) params[2];
             Log.e(TAG, "mat type "+Integer.toString(Rgba.type()));
 
-            String matString = matToJson(Rgba);
+            String matRgbaString = matToJson(Rgba);
+            String matGrayString = matToJson(gray);
 
             // send notification of AR obj adding
             if(aim == ADD_AR_OBJ) {
@@ -58,7 +60,8 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                 // dataOutputStream = new DataOutputStream(outputStream);
                 // dataOutputStream.writeInt(ADD_AR_OBJ);
                 objectOutputStream = new ObjectOutputStream(outputStream);
-                objectOutputStream.writeObject(matString);
+                objectOutputStream.writeObject(matRgbaString);
+                objectOutputStream.writeObject(matGrayString);
 
                 socket.close();
                 outputStream.close();

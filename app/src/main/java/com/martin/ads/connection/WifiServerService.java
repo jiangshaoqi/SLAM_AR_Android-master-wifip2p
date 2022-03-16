@@ -6,7 +6,9 @@ import android.app.IntentService;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
+import android.os.ResultReceiver;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -55,10 +57,14 @@ public class WifiServerService extends IntentService {
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onHandleIntent(Intent intent) {
+        ResultReceiver rec = intent.getParcelableExtra("receiverTag");
+
         clean();
         // int aim;
         Mat Rgba;
-        String matString;
+        Mat gray;
+        String matRgbaString;
+        String matGrayString;
         try {
             serverSocket = new ServerSocket();
             serverSocket.setReuseAddress(true);
@@ -70,14 +76,16 @@ public class WifiServerService extends IntentService {
             objectInputStream = new ObjectInputStream(inputStream);
 
             //aim = dataInputStream.readInt();
-            matString = (String) objectInputStream.readObject();
+            matRgbaString = (String) objectInputStream.readObject();
+            matGrayString = (String) objectInputStream.readObject();
 
-            if(matString != null) {
-                // this host notice that a peer is adding an AR object
-                // 3.3.2022 only test, need more action
-                Rgba = matFromJson(matString);
+
+            if(matRgbaString != null && matGrayString != null) {
+                Rgba = matFromJson(matRgbaString);
+                gray = matFromJson(matRgbaString);
                 Log.e(TAG, "Receive the Processed frame");
             }
+
             serverSocket.close();
             inputStream.close();
             // dataInputStream.close();
@@ -88,11 +96,19 @@ public class WifiServerService extends IntentService {
             // dataInputStream = null;
             objectInputStream = null;
 
+            // send back to activity
+            Bundle bundle = new Bundle();
+            bundle.putString("Mat rgba String", matRgbaString);
+            bundle.putString("Mat gray String", matGrayString);
+            rec.send(0, bundle);
+
         } catch (Exception e) {
             Log.e(TAG, "receive file Exception: " + e.getMessage());
         } finally {
             clean();
-            startService(new Intent(this, WifiServerService.class));
+            Intent temp_intent = new Intent(this, WifiServerService.class);
+            temp_intent.putExtra("receiverTag", rec);
+            startService(temp_intent);
         }
     }
 
@@ -147,5 +163,6 @@ public class WifiServerService extends IntentService {
             return WifiServerService.this;
         }
     }
+
 }
 // 3.3.2022 end

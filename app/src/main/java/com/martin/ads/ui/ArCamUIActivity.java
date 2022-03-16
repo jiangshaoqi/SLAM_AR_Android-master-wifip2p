@@ -4,14 +4,18 @@ package com.martin.ads.ui;
  * Created by Ads on 2017/3/9.
  */
 
+import static com.martin.ads.connection.MatUtil.matFromJson;
+
 import android.Manifest;
 import android.content.ComponentName;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
 
 import android.net.wifi.WpsInfo;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.Menu;
@@ -24,6 +28,7 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.martin.ads.connection.ActivityReceiver;
 import com.martin.ads.constant.GlobalConstant;
 import com.martin.ads.rendering.render.ArObjectWrapper;
 import com.martin.ads.rendering.render.ObjRendererWrapper;
@@ -37,6 +42,7 @@ import com.martin.ads.utils.TouchHelper;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
@@ -65,7 +71,7 @@ import com.martin.ads.connection.WifiDirectBroadcastReceiver;
 // 2.28.2022 end
 
 public class ArCamUIActivity extends AppCompatActivity implements
-        CameraGLViewBase.CvCameraViewListener2 {
+        CameraGLViewBase.CvCameraViewListener2, ActivityReceiver.Receiver {
 
     // 2.28.2022 wifi p2p connection start
     private WifiP2pManager wifiP2pManager;
@@ -130,12 +136,14 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 // sender 3.8.2022
                 // deviceAdapter.notifyDataSetChanged();
 
-                if(wifiP2pInfo.isGroupOwner) {
+                if (wifiP2pInfo.isGroupOwner) {
                     Log.e(TAG, "p2p receiver group owner");
                     Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
                     connectionInfoAvailable = true;
                     if (wifiServerService != null) {
-                        startService(new Intent(ArCamUIActivity.this, WifiServerService.class));
+                        Intent temp_intent = new Intent(ArCamUIActivity.this, WifiServerService.class);
+                        temp_intent.putExtra("receiverTag", mReceiver);
+                        startService(temp_intent);
                     }
                 } else {
                     Log.e(TAG, "p2p receiver not group owner");
@@ -196,6 +204,11 @@ public class ArCamUIActivity extends AppCompatActivity implements
         registerReceiver(broadcastReceiver, WifiDirectBroadcastReceiver.getIntentFilter());
         bindService();
 
+        // 3.16.2022
+        mReceiver = new ActivityReceiver(new Handler());
+        mReceiver.setReceiver(this);
+
+        received = false;
     }
 
     // 2.28.2022 start
@@ -237,7 +250,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 // 3.4.2022 start: notify peers that device adding AR obj
                 if (wifiP2pInfo != null) {
                     Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
-                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba);
+                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray);
                 } else {
                     Toast.makeText(this, "wifiP2pInfo is null", Toast.LENGTH_SHORT).show();
                 }
@@ -291,11 +304,15 @@ public class ArCamUIActivity extends AppCompatActivity implements
         System.exit(0);
     }
 
-    private static final String    TAG = "SlamCamActivity";
+    private static final String TAG = "SlamCamActivity";
 
     private Mat mRgba;
-    private Mat                    mIntermediateMat;
-    private Mat                    mGray;
+    private Mat mIntermediateMat;
+    private Mat mGray;
+
+    private Mat recRgba;
+    private Mat recGray;
+    private boolean received;
 
     // 3.15.2022 start
 
@@ -312,23 +329,23 @@ public class ArCamUIActivity extends AppCompatActivity implements
     private FpsMeter mFpsMeter = null;
     private TextView fpsText;
 
-    private void initView(){
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
+    private void initView() {
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        nativeHelper=new NativeHelper(this);
+        nativeHelper = new NativeHelper(this);
         mOpenCvCameraView = (CameraGLView) findViewById(R.id.my_fake_glsurface_view);
         mOpenCvCameraView.setVisibility(View.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
-        initFinished=false;
+        initFinished = false;
 
-        touchHelper=new TouchHelper(this);
+        touchHelper = new TouchHelper(this);
         initGLES10Demo();
         //initGLES20Demo();
         initGLES20Obj();
 
-        View touchView=findViewById(R.id.touch_panel);
+        View touchView = findViewById(R.id.touch_panel);
         touchView.setClickable(true);
         touchView.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -339,8 +356,8 @@ public class ArCamUIActivity extends AppCompatActivity implements
         touchView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Camera camera=mOpenCvCameraView.getCamera();
-                if (camera!=null) camera.autoFocus(null);
+                Camera camera = mOpenCvCameraView.getCamera();
+                if (camera != null) camera.autoFocus(null);
             }
         });
         //touchView.bringToFront();
@@ -365,9 +382,9 @@ public class ArCamUIActivity extends AppCompatActivity implements
         test_button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(wifiP2pDeviceList.size() > 0) {
+                if (wifiP2pDeviceList.size() > 0) {
                     mWifiP2pDevice = wifiP2pDeviceList.get(device_idx);
-                    Toast.makeText(ArCamUIActivity.this, "device: "+mWifiP2pDevice.deviceName, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ArCamUIActivity.this, "device: " + mWifiP2pDevice.deviceName, Toast.LENGTH_SHORT).show();
                     device_idx = (device_idx + 1) % wifiP2pDeviceList.size();
                 } else {
                     Toast.makeText(ArCamUIActivity.this, "no peer device", Toast.LENGTH_SHORT).show();
@@ -380,10 +397,10 @@ public class ArCamUIActivity extends AppCompatActivity implements
     }
 
     private void initGLES10Demo() {
-        final GLRootView glRootView=findViewById(R.id.ar_object_view_gles1);
-        glRootView.setAspectRatio(GlobalConstant.RESOLUTION_WIDTH,GlobalConstant.RESOLUTION_HEIGHT);
+        final GLRootView glRootView = findViewById(R.id.ar_object_view_gles1);
+        glRootView.setAspectRatio(GlobalConstant.RESOLUTION_WIDTH, GlobalConstant.RESOLUTION_HEIGHT);
 
-        GLES10Demo gles10Demo=
+        GLES10Demo gles10Demo =
                 GLES10Demo.newInstance()
                         .setArObjectView(glRootView)
                         .setNativeHelper(nativeHelper)
@@ -407,10 +424,10 @@ public class ArCamUIActivity extends AppCompatActivity implements
 //    }
 
     private void initGLES20Obj() {
-        final GLRootView glRootView=findViewById(R.id.ar_object_view_gles2_obj);
-        glRootView.setAspectRatio(GlobalConstant.RESOLUTION_WIDTH,GlobalConstant.RESOLUTION_HEIGHT);
+        final GLRootView glRootView = findViewById(R.id.ar_object_view_gles2_obj);
+        glRootView.setAspectRatio(GlobalConstant.RESOLUTION_WIDTH, GlobalConstant.RESOLUTION_HEIGHT);
 
-        ObjRendererWrapper objRendererWrapper=
+        ObjRendererWrapper objRendererWrapper =
                 ObjRendererWrapper.newInstance()
                         .setArObjectView(glRootView)
                         .setNativeHelper(nativeHelper)
@@ -429,24 +446,22 @@ public class ArCamUIActivity extends AppCompatActivity implements
     }
 
     @Override
-    public void onPause()
-    {
+    public void onPause() {
         super.onPause();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
     }
 
     @Override
-    public void onResume()
-    {
+    public void onResume() {
         super.onResume();
         Log.d(TAG, "OpenCV library found inside package. Using it!");
         mOpenCvCameraView.enableView();
 
         if (!initFinished) {
-            initFinished=true;
-            String resDir = this.getExternalFilesDir("SLAM").getAbsolutePath()+"/";
-            Log.d(TAG, "onResume: "+resDir);
+            initFinished = true;
+            String resDir = this.getExternalFilesDir("SLAM").getAbsolutePath() + "/";
+            Log.d(TAG, "onResume: " + resDir);
             nativeHelper.initSLAM(resDir);
         }
     }
@@ -497,16 +512,24 @@ public class ArCamUIActivity extends AppCompatActivity implements
     }
 
     public Mat onCameraFrame(CameraGLViewBase.CvCameraViewFrame inputFrame) {
-        mRgba = inputFrame.rgba();
-        mGray = inputFrame.gray();
 
-        if(initFinished){
+        if(received) {
+            mRgba = recRgba;
+            mGray = recGray;
+            received = false;
+            detectPlane = true;
+        } else {
+            mRgba = inputFrame.rgba();
+            mGray = inputFrame.gray();
+        }
+
+        if (initFinished) {
             //Log.d("JNI_", "onCameraFrame: new image coming");
-            int trackingResult=nativeHelper.processCameraFrame(mGray.getNativeObjAddr(), mRgba.getNativeObjAddr());
-            if(detectPlane){
+            int trackingResult = nativeHelper.processCameraFrame(mGray.getNativeObjAddr(), mRgba.getNativeObjAddr());
+            if (detectPlane) {
                 showHint("Request sent.");
-                int detectResult=nativeHelper.detectPlane();
-                detectPlane=false;
+                int detectResult = nativeHelper.detectPlane();
+                detectPlane = false;
             }
             //Log.d("JNI_", "onCameraFrame: new image finished");
         }
@@ -520,11 +543,12 @@ public class ArCamUIActivity extends AppCompatActivity implements
         });
         return mRgba;
     }
-    private void showHint(final String str){
+
+    private void showHint(final String str) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Toast.makeText(ArCamUIActivity.this,str,Toast.LENGTH_LONG).show();
+                Toast.makeText(ArCamUIActivity.this, str, Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -541,16 +565,16 @@ public class ArCamUIActivity extends AppCompatActivity implements
         if (config.deviceAddress != null && mWifiP2pDevice != null) {
             wifiP2pManager.connect(channel, config, new WifiP2pManager.ActionListener() {
 
-                        @Override
-                        public void onSuccess() {
-                            Toast.makeText(ArCamUIActivity.this, "connect success", Toast.LENGTH_SHORT).show();
-                        }
+                @Override
+                public void onSuccess() {
+                    Toast.makeText(ArCamUIActivity.this, "connect success", Toast.LENGTH_SHORT).show();
+                }
 
-                        @Override
-                        public void onFailure(int reason) {
-                            Toast.makeText(ArCamUIActivity.this, "connect fail", Toast.LENGTH_SHORT).show();
-                        }
-                    });
+                @Override
+                public void onFailure(int reason) {
+                    Toast.makeText(ArCamUIActivity.this, "connect fail", Toast.LENGTH_SHORT).show();
+                }
+            });
         } else {
             Toast.makeText(ArCamUIActivity.this, "no connection", Toast.LENGTH_SHORT).show();
         }
@@ -558,4 +582,25 @@ public class ArCamUIActivity extends AppCompatActivity implements
     }
 
     // 3.3.2022 end
+    // 3.16.2022 start
+    public ActivityReceiver mReceiver;
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    @Override
+    public void onReceiveResult(int resultCode, Bundle resultData) {
+
+        String matRgbaString = resultData.getString("Mat rgba String");
+        String matGrayString = resultData.getString("Mat gray String");
+
+        recRgba = matFromJson(matRgbaString);
+        recGray = matFromJson(matGrayString);
+        Log.e(TAG, matGrayString);
+        if(recGray == null) {
+            Log.e(TAG, "recGray is null");
+        } else {
+            Log.e(TAG, "recGray is good");
+        }
+
+        received = true;
+    }
 }
