@@ -29,7 +29,7 @@
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_above="@id/rv_deviceList"
+        android:layout_above="@id/text_fps"
         android:id="@+id/test_button"
         android:text="mDevice" />
 
@@ -45,7 +45,7 @@
         android:id="@+id/rv_deviceList"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_above="@id/text_fps"/>
+        android:layout_above="@id/connect_button"/>
 
     <!--<com.martin.ads.rendering.gles.GLRootView-->
         <!--android:id="@+id/ar_object_view_gles2_sphere"-->

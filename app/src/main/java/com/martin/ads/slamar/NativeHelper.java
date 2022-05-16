@@ -76,6 +76,23 @@ public class NativeHelper {
         }
         return planeDetectResult;
     }
+
+    // 4.1.2022 start
+    public void setModel(float[] inputModel) {
+        planeDetected = true;
+        getP(GlobalConstant.RESOLUTION_WIDTH, GlobalConstant.RESOLUTION_HEIGHT, projectionMatrix);
+        for (OnMVPUpdatedCallback onMVPUpdatedCallback : onMVPUpdatedCallbacks) {
+            onMVPUpdatedCallback.requestReset();
+            onMVPUpdatedCallback.onUpdateModelMatrix(inputModel);
+            onMVPUpdatedCallback.onUpdateProjectionMatrix(projectionMatrix);
+        }
+        for (OnMVPUpdatedCallback onMVPUpdatedCallback : onMVPUpdatedCallbacks) {
+            boolean shouldDraw=lastTrackingResult==GlobalConstant.SLAM_ON  && planeDetected;
+            onMVPUpdatedCallback.setDraw(shouldDraw);
+        }
+    }
+    // end
+
     //bitmap/camera+ mat + pure mono slam
     private native void nativeProcessFrameMat(long matAddrGr, long matAddrRgba,int []statusBuf);
     private native void detect(int []statusBuf);
@@ -85,6 +102,18 @@ public class NativeHelper {
     private native void getM(float modelM[]);
     private native void getV(float viewM[]);
     private native void getP(int imageWidth,int imageHeight,float projectionM[]);
+
+    // 4.1.2022 start
+    public void getView(float[] hostView) {
+        for(int i = 0; i < 16; i ++)
+            hostView[i] = viewMatrix[i];
+    }
+
+    public void getModel(float[] hostModel) {
+        for(int i = 0; i < 16; i ++)
+            hostModel[i] = modelMatrix[i];
+    }
+    // end
 
     public int getLastTrackingResult() {
         return lastTrackingResult;

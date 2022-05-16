@@ -5,6 +5,10 @@ package com.martin.ads.ui;
  */
 
 import static com.martin.ads.connection.MatUtil.matFromJson;
+import static com.martin.ads.connection.MatUtil.matInv;
+import static com.martin.ads.connection.MatUtil.matInv2;
+import static com.martin.ads.connection.MatUtil.matMul;
+import static com.martin.ads.connection.MatUtil.matRotate;
 
 import android.Manifest;
 import android.content.ComponentName;
@@ -18,6 +22,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
+import android.util.TimingLogger;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -60,6 +65,7 @@ import android.content.ServiceConnection;
 import android.net.wifi.p2p.WifiP2pManager;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -250,7 +256,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 // 3.4.2022 start: notify peers that device adding AR obj
                 if (wifiP2pInfo != null) {
                     Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
-                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray);
+                    // new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray);
                 } else {
                     Toast.makeText(this, "wifiP2pInfo is null", Toast.LENGTH_SHORT).show();
                 }
@@ -262,6 +268,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                     return false;
                 }
+                long startTime_a2 = System.nanoTime();
                 wifiP2pManager.createGroup(channel, new WifiP2pManager.ActionListener() {
                     @Override
                     public void onSuccess() {
@@ -273,6 +280,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                         Toast.makeText(ArCamUIActivity.this, "Create group fail", Toast.LENGTH_SHORT).show();
                     }
                 });
+                Log.e(TAG, "A2 phase Time: " + ((System.nanoTime()-startTime_a2)/1000000)+ "mS\n");
                 break;
 
             case R.id.menuDirectDiscover:
@@ -312,6 +320,10 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
     private Mat recRgba;
     private Mat recGray;
+
+    private float[] recvHostView = new float[16];
+    private float[] recvHostModel = new float[16];
+
     private boolean received;
 
     // 3.15.2022 start
@@ -341,9 +353,11 @@ public class ArCamUIActivity extends AppCompatActivity implements
         initFinished = false;
 
         touchHelper = new TouchHelper(this);
+        long startTime_d = System.nanoTime();
         initGLES10Demo();
         //initGLES20Demo();
         initGLES20Obj();
+        Log.e(TAG, "D phase Time: " + ((System.nanoTime()-startTime_d)/1000000)+ "mS\n");
 
         View touchView = findViewById(R.id.touch_panel);
         touchView.setClickable(true);
@@ -511,13 +525,20 @@ public class ArCamUIActivity extends AppCompatActivity implements
         mIntermediateMat.release();
     }
 
+    public float[] hostView = new float[16];
+    public float[] hostModel = new float[16];
+    public float[] resolverModel;
+    public float[] resolverView = new float[16];
+    public float[] resolverViewInv;
+    public float[] tempMat;
+
     public Mat onCameraFrame(CameraGLViewBase.CvCameraViewFrame inputFrame) {
 
         if(received) {
             mRgba = recRgba;
             mGray = recGray;
-            received = false;
-            detectPlane = true;
+            // version 0.1: detectPlane = true
+            // detectPlane = true;
         } else {
             mRgba = inputFrame.rgba();
             mGray = inputFrame.gray();
@@ -525,13 +546,47 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
         if (initFinished) {
             //Log.d("JNI_", "onCameraFrame: new image coming");
+            long startTime = System.nanoTime();
             int trackingResult = nativeHelper.processCameraFrame(mGray.getNativeObjAddr(), mRgba.getNativeObjAddr());
+
             if (detectPlane) {
+
+                // host, client action
                 showHint("Request sent.");
                 int detectResult = nativeHelper.detectPlane();
                 detectPlane = false;
+
+                // 4.2.2022 start
+                nativeHelper.getView(hostView);
+
+                // for test
+                Log.e(TAG, "view M: " + Arrays.toString(hostView));
+                Log.e(TAG, "matInv result: " + Arrays.toString(matInv(hostView)));
+                Log.e(TAG, "matInv2 result: " + Arrays.toString(matInv2(hostView)));
+                // end test
+                nativeHelper.getModel(hostModel);
+                if(wifiP2pInfo != null)
+                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray, hostView, hostModel);
+
+                Log.e(TAG, "1D phase Time: " + ((System.nanoTime()-startTime)/1000000)+ "mS\n");
+            }
+
+            if (received) {
+                tempMat = matMul(recvHostModel, recvHostView);
+                nativeHelper.getView(resolverView);
+
+                resolverViewInv = matInv2(resolverView);
+                resolverModel = matMul(tempMat, resolverViewInv);
+                resolverModel = matRotate(resolverModel);
+                nativeHelper.setModel(resolverModel);
+                Log.e(TAG, "2C phase Time: " + ((System.nanoTime()-startTime)/1000000)+ "mS\n");
+
+                received = false;
             }
             //Log.d("JNI_", "onCameraFrame: new image finished");
+
+            // 4.1.2022 start
+            // get M and V
         }
 
         mFpsMeter.measure();
@@ -559,6 +614,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
             Toast.makeText(ArCamUIActivity.this, "need permission in connect()", Toast.LENGTH_SHORT).show();
             return;
         }
+        long startTime_1a = System.nanoTime();
         WifiP2pConfig config = new WifiP2pConfig();
         config.deviceAddress = mWifiP2pDevice.deviceAddress;
         config.wps.setup = WpsInfo.PBC;
@@ -568,6 +624,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 @Override
                 public void onSuccess() {
                     Toast.makeText(ArCamUIActivity.this, "connect success", Toast.LENGTH_SHORT).show();
+                    Log.e(TAG, "1A phase Time: " + ((System.nanoTime()-startTime_1a)/1000000)+ "mS\n");
                 }
 
                 @Override
@@ -591,6 +648,8 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
         String matRgbaString = resultData.getString("Mat rgba String");
         String matGrayString = resultData.getString("Mat gray String");
+        String[] recViewStrArr = resultData.getStringArray("hostView String arr");
+        String[] recModelStrArr = resultData.getStringArray("hostModel String arr");
 
         recRgba = matFromJson(matRgbaString);
         recGray = matFromJson(matGrayString);
@@ -600,6 +659,26 @@ public class ArCamUIActivity extends AppCompatActivity implements
         } else {
             Log.e(TAG, "recGray is good");
         }
+        // 4.1.2022 start
+        for(int i = 0; i < 16; i ++) {
+            recvHostView[i] = Float.parseFloat(recViewStrArr[i]);
+        }
+        for(int i = 0; i < 16; i ++) {
+            recvHostModel[i] = Float.parseFloat(recModelStrArr[i]);
+        }
+
+        if(recvHostView != null) {
+            Log.e(TAG, Arrays.toString(recvHostView));
+        } else {
+            Log.e(TAG, "received host view null");
+        }
+
+        if(recvHostModel != null) {
+            Log.e(TAG, Arrays.toString(recvHostModel));
+        } else {
+            Log.e(TAG, "received host model null");
+        }
+        // end
 
         received = true;
     }

@@ -95,6 +95,8 @@ public class ObjRendererWrapper implements GLSurfaceView.Renderer,NativeHelper.O
 
     @Override
     public void onDrawFrame(GL10 gl) {
+        long startTime_d = System.nanoTime();
+
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         GLES20.glClear( GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
@@ -114,6 +116,8 @@ public class ObjRendererWrapper implements GLSurfaceView.Renderer,NativeHelper.O
 
         virtualObject.updateModelMatrix(tmpMatrix, initSize*scaleFactor);
         virtualObject.draw(viewMatrix, projectionMatrix, lightIntensity);
+
+        // Log.e(TAG, "D phase Time: " + ((System.nanoTime()-startTime_d)/1000000)+ "mS\n");
     }
 
     public ObjRendererWrapper setArObjectView(GLSurfaceView arObjectView) {

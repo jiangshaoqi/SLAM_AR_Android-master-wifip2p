@@ -65,6 +65,8 @@ public class WifiServerService extends IntentService {
         Mat gray;
         String matRgbaString;
         String matGrayString;
+        String[] hostView = new String[16];
+        String[] hostModel = new String[16];
         try {
             serverSocket = new ServerSocket();
             serverSocket.setReuseAddress(true);
@@ -75,16 +77,26 @@ public class WifiServerService extends IntentService {
             // dataInputStream = new DataInputStream(inputStream);
             objectInputStream = new ObjectInputStream(inputStream);
 
+            long startTime_2b = System.nanoTime();
             //aim = dataInputStream.readInt();
             matRgbaString = (String) objectInputStream.readObject();
             matGrayString = (String) objectInputStream.readObject();
 
+            // 4.1.2022 start
+            for(int i = 0; i < 16; i ++) {
+                hostView[i] = (String) objectInputStream.readObject();
+            }
+            for(int i = 0; i < 16; i ++) {
+                hostModel[i] = (String) objectInputStream.readObject();
+            }
+            // end
 
             if(matRgbaString != null && matGrayString != null) {
                 Rgba = matFromJson(matRgbaString);
                 gray = matFromJson(matRgbaString);
                 Log.e(TAG, "Receive the Processed frame");
             }
+            Log.e(TAG, "2B phase Time: " + ((System.nanoTime()-startTime_2b)/1000000)+ "mS\n");
 
             serverSocket.close();
             inputStream.close();
@@ -100,6 +112,8 @@ public class WifiServerService extends IntentService {
             Bundle bundle = new Bundle();
             bundle.putString("Mat rgba String", matRgbaString);
             bundle.putString("Mat gray String", matGrayString);
+            bundle.putStringArray("hostView String arr", hostView);
+            bundle.putStringArray("hostModel String arr", hostModel);
             rec.send(0, bundle);
 
         } catch (Exception e) {

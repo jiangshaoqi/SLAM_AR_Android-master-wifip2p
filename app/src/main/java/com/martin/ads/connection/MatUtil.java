@@ -1,5 +1,8 @@
 package com.martin.ads.connection;
 
+import static android.opengl.Matrix.rotateM;
+
+import android.opengl.Matrix;
 import android.os.Build;
 
 import androidx.annotation.RequiresApi;
@@ -103,5 +106,51 @@ public class MatUtil {
             throw new UnsupportedOperationException("unknown type");
         }
         return mat;
+    }
+
+    // 4.1.2022 start
+    // m1 * m2 = m3
+    public static float[] matMul(float[] m1, float[] m2) {
+        float[] m3 = new float[16];
+        Matrix.multiplyMM(m3, 0, m1, 0, m2, 0);
+        return m3;
+    }
+
+    public static float[] matInv(float[] m) {
+        float[] mInv = new float[16];
+        if (Matrix.invertM(mInv, 0, m, 0)) {
+            return mInv;
+        } else {
+            return null;
+        }
+    }
+    // 4.1.2022 end
+
+    public static float[] matInv2(float[] m) {
+        float[] mInv = new float[16];
+        mInv[0] = m[0];
+        mInv[1] = m[4];
+        mInv[2] = m[8];
+        mInv[3] = 0;
+        mInv[4] = m[1];
+        mInv[5] = m[5];
+        mInv[6] = m[9];
+        mInv[7] = 0;
+        mInv[8] = m[2];
+        mInv[9] = m[6];
+        mInv[10] = m[10];
+        mInv[11] = 0;
+        mInv[12] = -1 * (m[0] * m[12] + m[1] * m[13] + m[2] * m[14]);
+        mInv[13] = -1 * (m[4] * m[12] + m[5] * m[13] + m[6] * m[14]);
+        mInv[14] = -1 * (m[8] * m[12] + m[9] * m[13] + m[10] * m[14]);
+        mInv[15] = 1;
+
+        return mInv;
+    }
+
+    public static float[] matRotate(float[] m) {
+        float[] mRot = new float[16];
+        rotateM(mRot, 0, m, 0, 0.0f, 0, 1, 0);
+        return mRot;
     }
 }

@@ -46,6 +46,8 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
             String hostAddress = params[0].toString();
             Mat Rgba = (Mat) params[1];
             Mat gray = (Mat) params[2];
+            float[] hostView = (float[]) params[3];
+            float[] hostModel = (float[]) params[4];
             Log.e(TAG, "mat type "+Integer.toString(Rgba.type()));
 
             String matRgbaString = matToJson(Rgba);
@@ -56,12 +58,22 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                 socket = new Socket();
                 socket.bind(null);
                 socket.connect((new InetSocketAddress(hostAddress, RECV_PORT)), 10000);
+                long startTime_1b = System.nanoTime();
                 outputStream = socket.getOutputStream();
                 // dataOutputStream = new DataOutputStream(outputStream);
                 // dataOutputStream.writeInt(ADD_AR_OBJ);
                 objectOutputStream = new ObjectOutputStream(outputStream);
                 objectOutputStream.writeObject(matRgbaString);
                 objectOutputStream.writeObject(matGrayString);
+                // 4.1.2022 start
+                for(float f : hostView) {
+                    objectOutputStream.writeObject(String.valueOf(f));
+                }
+                for(float f : hostModel) {
+                    objectOutputStream.writeObject(String.valueOf(f));
+                }
+                // end
+                Log.e(TAG, "1B phase Time: " + ((System.nanoTime()-startTime_1b)/1000000)+ "mS\n");
 
                 socket.close();
                 outputStream.close();
