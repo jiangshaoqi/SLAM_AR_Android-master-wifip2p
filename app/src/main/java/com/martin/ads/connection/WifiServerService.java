@@ -67,12 +67,17 @@ public class WifiServerService extends IntentService {
         String matGrayString;
         String[] hostView = new String[16];
         String[] hostModel = new String[16];
+        String clientAddress;
         try {
+            // 5.16.2022
+            int numBytes = 0;
+
             serverSocket = new ServerSocket();
             serverSocket.setReuseAddress(true);
             serverSocket.bind(new InetSocketAddress(PORT));
             Socket client = serverSocket.accept();
-            Log.e(TAG, "client address : " + client.getInetAddress().getHostAddress());
+            clientAddress = client.getInetAddress().getHostAddress();
+            Log.e(TAG, "client address : " + clientAddress);
             inputStream = client.getInputStream();
             // dataInputStream = new DataInputStream(inputStream);
             objectInputStream = new ObjectInputStream(inputStream);
@@ -81,13 +86,17 @@ public class WifiServerService extends IntentService {
             //aim = dataInputStream.readInt();
             matRgbaString = (String) objectInputStream.readObject();
             matGrayString = (String) objectInputStream.readObject();
+            numBytes = numBytes + matRgbaString.getBytes().length;
+            numBytes = numBytes + matGrayString.getBytes().length;
 
             // 4.1.2022 start
             for(int i = 0; i < 16; i ++) {
                 hostView[i] = (String) objectInputStream.readObject();
+                numBytes = numBytes + hostView[i].getBytes().length;
             }
             for(int i = 0; i < 16; i ++) {
                 hostModel[i] = (String) objectInputStream.readObject();
+                numBytes = numBytes + hostModel[i].getBytes().length;
             }
             // end
 
@@ -98,6 +107,7 @@ public class WifiServerService extends IntentService {
             }
             Log.e(TAG, "2B phase Time: " + ((System.nanoTime()-startTime_2b)/1000000)+ "mS\n");
 
+            Log.e(TAG, "Total bytes been received: " + numBytes + "\n");
             serverSocket.close();
             inputStream.close();
             // dataInputStream.close();
@@ -114,6 +124,9 @@ public class WifiServerService extends IntentService {
             bundle.putString("Mat gray String", matGrayString);
             bundle.putStringArray("hostView String arr", hostView);
             bundle.putStringArray("hostModel String arr", hostModel);
+
+            // 5.19.2022
+            bundle.putString("client address", clientAddress);
             rec.send(0, bundle);
 
         } catch (Exception e) {

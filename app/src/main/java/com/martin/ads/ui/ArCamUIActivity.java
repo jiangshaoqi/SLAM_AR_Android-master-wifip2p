@@ -146,14 +146,15 @@ public class ArCamUIActivity extends AppCompatActivity implements
                     Log.e(TAG, "p2p receiver group owner");
                     Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
                     connectionInfoAvailable = true;
-                    if (wifiServerService != null) {
-                        Intent temp_intent = new Intent(ArCamUIActivity.this, WifiServerService.class);
-                        temp_intent.putExtra("receiverTag", mReceiver);
-                        startService(temp_intent);
-                    }
                 } else {
                     Log.e(TAG, "p2p receiver not group owner");
-                    ArCamUIActivity.this.wifiP2pInfo = wifiP2pInfo;
+                }
+                // 5.24.2022
+                ArCamUIActivity.this.wifiP2pInfo = wifiP2pInfo;
+                if (wifiServerService != null) {
+                    Intent temp_intent = new Intent(ArCamUIActivity.this, WifiServerService.class);
+                    temp_intent.putExtra("receiverTag", mReceiver);
+                    startService(temp_intent);
                 }
             }
         }
@@ -565,8 +566,13 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 Log.e(TAG, "matInv2 result: " + Arrays.toString(matInv2(hostView)));
                 // end test
                 nativeHelper.getModel(hostModel);
-                if(wifiP2pInfo != null)
-                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray, hostView, hostModel);
+                if(wifiP2pInfo != null) {
+                    Log.e(TAG, "Msg to resolver");
+                    if(wifiP2pInfo.isGroupOwner && clientAddress != null)
+                        new WifiClientTask(this, ADD_AR_OBJ).execute(clientAddress, mRgba, mGray, hostView, hostModel);
+                    if(!wifiP2pInfo.isGroupOwner)
+                        new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray, hostView, hostModel);
+                }
 
                 Log.e(TAG, "1D phase Time: " + ((System.nanoTime()-startTime)/1000000)+ "mS\n");
             }
@@ -641,6 +647,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
     // 3.3.2022 end
     // 3.16.2022 start
     public ActivityReceiver mReceiver;
+    public String clientAddress;
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
@@ -650,6 +657,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
         String matGrayString = resultData.getString("Mat gray String");
         String[] recViewStrArr = resultData.getStringArray("hostView String arr");
         String[] recModelStrArr = resultData.getStringArray("hostModel String arr");
+        clientAddress = resultData.getString("client address");
 
         recRgba = matFromJson(matRgbaString);
         recGray = matFromJson(matGrayString);
@@ -660,25 +668,10 @@ public class ArCamUIActivity extends AppCompatActivity implements
             Log.e(TAG, "recGray is good");
         }
         // 4.1.2022 start
-        for(int i = 0; i < 16; i ++) {
+        for(int i = 0; i < 16; i ++)
             recvHostView[i] = Float.parseFloat(recViewStrArr[i]);
-        }
-        for(int i = 0; i < 16; i ++) {
+        for(int i = 0; i < 16; i ++)
             recvHostModel[i] = Float.parseFloat(recModelStrArr[i]);
-        }
-
-        if(recvHostView != null) {
-            Log.e(TAG, Arrays.toString(recvHostView));
-        } else {
-            Log.e(TAG, "received host view null");
-        }
-
-        if(recvHostModel != null) {
-            Log.e(TAG, Arrays.toString(recvHostModel));
-        } else {
-            Log.e(TAG, "received host model null");
-        }
-        // end
 
         received = true;
     }

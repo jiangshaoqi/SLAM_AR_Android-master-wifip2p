@@ -43,6 +43,11 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
         // DataOutputStream dataOutputStream = null;
         ObjectOutputStream objectOutputStream = null;
         try {
+            // 5.16.2022
+            // total data transfer in bytes
+            Log.e(TAG, "begin to send");
+            int numBytes = 0;
+
             String hostAddress = params[0].toString();
             Mat Rgba = (Mat) params[1];
             Mat gray = (Mat) params[2];
@@ -52,7 +57,8 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
 
             String matRgbaString = matToJson(Rgba);
             String matGrayString = matToJson(gray);
-
+            numBytes = numBytes + matRgbaString.getBytes().length;
+            numBytes = numBytes + matGrayString.getBytes().length;
             // send notification of AR obj adding
             if(aim == ADD_AR_OBJ) {
                 socket = new Socket();
@@ -68,13 +74,15 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                 // 4.1.2022 start
                 for(float f : hostView) {
                     objectOutputStream.writeObject(String.valueOf(f));
+                    numBytes = numBytes + String.valueOf(f).getBytes().length;
                 }
                 for(float f : hostModel) {
                     objectOutputStream.writeObject(String.valueOf(f));
+                    numBytes = numBytes + String.valueOf(f).getBytes().length;
                 }
                 // end
                 Log.e(TAG, "1B phase Time: " + ((System.nanoTime()-startTime_1b)/1000000)+ "mS\n");
-
+                Log.e(TAG, "Total bytes transferred: " + numBytes + "\n");
                 socket.close();
                 outputStream.close();
                 // dataOutputStream.close();
