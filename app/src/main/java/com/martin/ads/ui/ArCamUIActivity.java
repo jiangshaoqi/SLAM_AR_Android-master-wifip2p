@@ -141,7 +141,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
                 // sender 3.8.2022
                 // deviceAdapter.notifyDataSetChanged();
-
+                Log.e(TAG, "group formed");
                 if (wifiP2pInfo.isGroupOwner) {
                     Log.e(TAG, "p2p receiver group owner");
                     Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
@@ -190,6 +190,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
     // 2.28.2022 end
 
+    @RequiresApi(api = Build.VERSION_CODES.Q)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -216,6 +217,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
         mReceiver.setReceiver(this);
 
         received = false;
+        clientAddressList = new ArrayList<>();
     }
 
     // 2.28.2022 start
@@ -249,6 +251,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
         return true;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.Q)
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
@@ -256,7 +259,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 detectPlane = true;
                 // 3.4.2022 start: notify peers that device adding AR obj
                 if (wifiP2pInfo != null) {
-                    Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
+                    Log.e(TAG, "GO address: " + wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
                     // new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray);
                 } else {
                     Toast.makeText(this, "wifiP2pInfo is null", Toast.LENGTH_SHORT).show();
@@ -270,7 +273,13 @@ public class ArCamUIActivity extends AppCompatActivity implements
                     return false;
                 }
                 long startTime_a2 = System.nanoTime();
-                wifiP2pManager.createGroup(channel, new WifiP2pManager.ActionListener() {
+                // 5.26.2022
+                WifiP2pConfig ownerConfig = new WifiP2pConfig.Builder()
+                        .setNetworkName("DIRECT-demo")
+                        .setPassphrase("12345678")
+                        .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_5GHZ)
+                        .build();
+                wifiP2pManager.createGroup(channel, ownerConfig, new WifiP2pManager.ActionListener() {
                     @Override
                     public void onSuccess() {
                         Toast.makeText(ArCamUIActivity.this, "Create group success:", Toast.LENGTH_SHORT).show();
@@ -342,6 +351,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
     private FpsMeter mFpsMeter = null;
     private TextView fpsText;
 
+    @RequiresApi(api = Build.VERSION_CODES.Q)
     private void initView() {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -568,10 +578,24 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 nativeHelper.getModel(hostModel);
                 if(wifiP2pInfo != null) {
                     Log.e(TAG, "Msg to resolver");
-                    if(wifiP2pInfo.isGroupOwner && clientAddress != null)
-                        new WifiClientTask(this, ADD_AR_OBJ).execute(clientAddress, mRgba, mGray, hostView, hostModel);
-                    if(!wifiP2pInfo.isGroupOwner)
-                        new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray, hostView, hostModel);
+                    if(wifiP2pInfo.isGroupOwner && !(clientAddressList.isEmpty())) {
+                        for(String addr : clientAddressList) {
+                            List<String> tempList = new ArrayList<>(clientAddressList);
+                            tempList.remove(addr);
+                            new WifiClientTask(this, ADD_AR_OBJ).execute(addr, mRgba, mGray, hostView, hostModel, tempList);
+                        }
+                    }
+                    if(!wifiP2pInfo.isGroupOwner) {
+                        List<String> tempList = new ArrayList<>(clientAddressList);
+                        tempList.add(wifiP2pInfo.groupOwnerAddress.getHostAddress());
+                        for(String addr : tempList) {
+                            Log.e(TAG, "address in list" + addr);
+                            new WifiClientTask(this, ADD_AR_OBJ).execute(addr, mRgba, mGray, hostView, hostModel, null);
+                        }
+                    }
+                    /*
+                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray, hostView, hostModel);
+                    */
                 }
 
                 Log.e(TAG, "1D phase Time: " + ((System.nanoTime()-startTime)/1000000)+ "mS\n");
@@ -615,15 +639,31 @@ public class ArCamUIActivity extends AppCompatActivity implements
     }
 
     // 3.3.2022 start
+
+    @RequiresApi(api = Build.VERSION_CODES.Q)
     private void connect() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(ArCamUIActivity.this, "need permission in connect()", Toast.LENGTH_SHORT).show();
             return;
         }
         long startTime_1a = System.nanoTime();
+        /*
         WifiP2pConfig config = new WifiP2pConfig();
         config.deviceAddress = mWifiP2pDevice.deviceAddress;
         config.wps.setup = WpsInfo.PBC;
+        */
+
+        // WifiP2pConfig config = new WifiP2pConfig.Builder().setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_5GHZ).build();
+
+        WifiP2pConfig config = new WifiP2pConfig.Builder()
+                .setNetworkName("DIRECT-demo")
+                .setPassphrase("12345678")
+                .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_5GHZ)
+                .build();
+        config.deviceAddress = mWifiP2pDevice.deviceAddress;
+        config.wps.setup = WpsInfo.PBC;
+
+
         if (config.deviceAddress != null && mWifiP2pDevice != null) {
             wifiP2pManager.connect(channel, config, new WifiP2pManager.ActionListener() {
 
@@ -648,6 +688,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
     // 3.16.2022 start
     public ActivityReceiver mReceiver;
     public String clientAddress;
+    public List<String> clientAddressList;
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
@@ -658,6 +699,16 @@ public class ArCamUIActivity extends AppCompatActivity implements
         String[] recViewStrArr = resultData.getStringArray("hostView String arr");
         String[] recModelStrArr = resultData.getStringArray("hostModel String arr");
         clientAddress = resultData.getString("client address");
+        if(wifiP2pInfo.isGroupOwner) {
+            Log.e(TAG, "client address: " + clientAddress);
+            if(!clientAddressList.contains(clientAddress))
+                clientAddressList.add(clientAddress);
+        } else {
+            if(clientAddress.equals(wifiP2pInfo.groupOwnerAddress.getHostAddress())) {
+                clientAddressList = resultData.getStringArrayList("client address list");
+                Log.e(TAG, "another client: " + clientAddressList.get(0));
+            }
+        }
 
         recRgba = matFromJson(matRgbaString);
         recGray = matFromJson(matGrayString);

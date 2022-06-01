@@ -18,6 +18,7 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.List;
 
 public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
 
@@ -53,7 +54,8 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
             Mat gray = (Mat) params[2];
             float[] hostView = (float[]) params[3];
             float[] hostModel = (float[]) params[4];
-            Log.e(TAG, "mat type "+Integer.toString(Rgba.type()));
+            List<String> addressList = (List<String>) params[5];
+            // Log.e(TAG, "mat type "+Integer.toString(Rgba.type()));
 
             String matRgbaString = matToJson(Rgba);
             String matGrayString = matToJson(gray);
@@ -80,6 +82,7 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                     objectOutputStream.writeObject(String.valueOf(f));
                     numBytes = numBytes + String.valueOf(f).getBytes().length;
                 }
+                objectOutputStream.writeObject(addressList);
                 // end
                 Log.e(TAG, "1B phase Time: " + ((System.nanoTime()-startTime_1b)/1000000)+ "mS\n");
                 Log.e(TAG, "Total bytes transferred: " + numBytes + "\n");

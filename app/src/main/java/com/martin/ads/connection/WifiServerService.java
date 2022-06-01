@@ -25,6 +25,8 @@ import java.io.ObjectInputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 // 3.3.2022 start
 // server to receive data
@@ -68,6 +70,7 @@ public class WifiServerService extends IntentService {
         String[] hostView = new String[16];
         String[] hostModel = new String[16];
         String clientAddress;
+        ArrayList<String> addressList;
         try {
             // 5.16.2022
             int numBytes = 0;
@@ -99,6 +102,7 @@ public class WifiServerService extends IntentService {
                 numBytes = numBytes + hostModel[i].getBytes().length;
             }
             // end
+            addressList = (ArrayList<String>) objectInputStream.readObject();
 
             if(matRgbaString != null && matGrayString != null) {
                 Rgba = matFromJson(matRgbaString);
@@ -127,6 +131,11 @@ public class WifiServerService extends IntentService {
 
             // 5.19.2022
             bundle.putString("client address", clientAddress);
+            bundle.putStringArrayList("client address list", addressList);
+            if(addressList != null)
+                Log.e(TAG, "server receive addr: " + addressList.get(0));
+            else
+                Log.e(TAG, "server receive null on address list");
             rec.send(0, bundle);
 
         } catch (Exception e) {
