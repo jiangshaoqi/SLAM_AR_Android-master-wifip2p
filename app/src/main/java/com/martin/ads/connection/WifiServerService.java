@@ -22,6 +22,8 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -71,6 +73,10 @@ public class WifiServerService extends IntentService {
         String[] hostModel = new String[16];
         String clientAddress;
         ArrayList<String> addressList;
+
+        OutputStream outputStream;
+        ObjectOutputStream objectOutputStream;
+
         try {
             // 5.16.2022
             int numBytes = 0;
@@ -111,6 +117,13 @@ public class WifiServerService extends IntentService {
             }
             Log.e(TAG, "2B phase Time: " + ((System.nanoTime()-startTime_2b)/1000000)+ "mS\n");
 
+            // 6.7.2022 start
+            outputStream = client.getOutputStream();
+            objectOutputStream = new ObjectOutputStream(outputStream);
+            objectOutputStream.writeObject(new String("msg from server"));
+            outputStream.close();
+            objectOutputStream.close();
+
             Log.e(TAG, "Total bytes been received: " + numBytes + "\n");
             serverSocket.close();
             inputStream.close();
@@ -132,10 +145,9 @@ public class WifiServerService extends IntentService {
             // 5.19.2022
             bundle.putString("client address", clientAddress);
             bundle.putStringArrayList("client address list", addressList);
-            if(addressList != null)
+            if(addressList != null && addressList.size() > 0) {
                 Log.e(TAG, "server receive addr: " + addressList.get(0));
-            else
-                Log.e(TAG, "server receive null on address list");
+            }
             rec.send(0, bundle);
 
         } catch (Exception e) {

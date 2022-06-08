@@ -14,10 +14,14 @@ import org.opencv.core.Mat;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.List;
 
 public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
@@ -41,8 +45,10 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
     protected Boolean doInBackground(Object... params) {
         Socket socket = null;
         OutputStream outputStream = null;
-        // DataOutputStream dataOutputStream = null;
         ObjectOutputStream objectOutputStream = null;
+
+        InputStream inputStream = null;
+        ObjectInputStream objectInputStream = null;
         try {
             // 5.16.2022
             // total data transfer in bytes
@@ -68,8 +74,6 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                 socket.connect((new InetSocketAddress(hostAddress, RECV_PORT)), 10000);
                 long startTime_1b = System.nanoTime();
                 outputStream = socket.getOutputStream();
-                // dataOutputStream = new DataOutputStream(outputStream);
-                // dataOutputStream.writeInt(ADD_AR_OBJ);
                 objectOutputStream = new ObjectOutputStream(outputStream);
                 objectOutputStream.writeObject(matRgbaString);
                 objectOutputStream.writeObject(matGrayString);
@@ -82,10 +86,23 @@ public class WifiClientTask extends AsyncTask<Object, Integer, Boolean> {
                     objectOutputStream.writeObject(String.valueOf(f));
                     numBytes = numBytes + String.valueOf(f).getBytes().length;
                 }
+                Log.e(TAG, "good now");
+                if(addressList == null)
+                    addressList = new ArrayList<>();
                 objectOutputStream.writeObject(addressList);
                 // end
-                Log.e(TAG, "1B phase Time: " + ((System.nanoTime()-startTime_1b)/1000000)+ "mS\n");
+
+                // 6.7.2022 start, client receive after send
+                inputStream = socket.getInputStream();
+                objectInputStream = new ObjectInputStream(inputStream);
+                String reply = (String)objectInputStream.readObject();
+                Log.e(TAG, "1B phase Time: " + hostAddress + " : " + ((System.nanoTime()-startTime_1b)/1000000)+ "mS\n");
                 Log.e(TAG, "Total bytes transferred: " + numBytes + "\n");
+                Log.e(TAG, reply);
+                inputStream.close();
+                objectInputStream.close();
+                // end
+
                 socket.close();
                 outputStream.close();
                 // dataOutputStream.close();

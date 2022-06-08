@@ -569,12 +569,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
                 // 4.2.2022 start
                 nativeHelper.getView(hostView);
-
-                // for test
-                Log.e(TAG, "view M: " + Arrays.toString(hostView));
-                Log.e(TAG, "matInv result: " + Arrays.toString(matInv(hostView)));
-                Log.e(TAG, "matInv2 result: " + Arrays.toString(matInv2(hostView)));
-                // end test
                 nativeHelper.getModel(hostModel);
                 if(wifiP2pInfo != null) {
                     Log.e(TAG, "Msg to resolver");
@@ -582,6 +576,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                         for(String addr : clientAddressList) {
                             List<String> tempList = new ArrayList<>(clientAddressList);
                             tempList.remove(addr);
+                            Log.e(TAG, "GO send to client");
                             new WifiClientTask(this, ADD_AR_OBJ).execute(addr, mRgba, mGray, hostView, hostModel, tempList);
                         }
                     }
@@ -706,7 +701,8 @@ public class ArCamUIActivity extends AppCompatActivity implements
         } else {
             if(clientAddress.equals(wifiP2pInfo.groupOwnerAddress.getHostAddress())) {
                 clientAddressList = resultData.getStringArrayList("client address list");
-                Log.e(TAG, "another client: " + clientAddressList.get(0));
+                if(clientAddressList != null && clientAddressList.size() > 0)
+                    Log.e(TAG, "another client: " + clientAddressList.get(0));
             }
         }
 
