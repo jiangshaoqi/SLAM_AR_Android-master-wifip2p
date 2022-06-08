@@ -14,3 +14,11 @@
 - 5.25.2022
 - Test socket programming for both devices
 - Good demo that each device can act as host and resolver simultaneously
+
+- 6.1.2022
+- This version is the complete prototype of multi-user AR app. It supports at least 3 or more users to
+- add object together. To test, first open the app. After SLAM set up, a device is set to group owner.
+- Then other devices set as client and join the group. 
+- First let all client send "+" request to the GO. After all client have sent, let to GO sent request "+".
+- GO at this time will notify to each client with other clients address. So that when a client want to 
+- add an object, it will tell the object info to all other devices.
