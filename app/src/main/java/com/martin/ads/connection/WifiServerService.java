@@ -192,17 +192,6 @@ public class WifiServerService extends IntentService {
                 e.printStackTrace();
             }
         }
-        /*
-        if (fileOutputStream != null) {
-            try {
-                fileOutputStream.close();
-                fileOutputStream = null;
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        */
     }
 
 

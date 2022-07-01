@@ -44,9 +44,6 @@
             android:theme="@style/ListTheme"
             android:screenOrientation="landscape"/>
 
-        <service
-            android:name="com.martin.ads.connection.WifiServerService"
-            android:exported="false" />
 
     </application>
 

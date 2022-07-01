@@ -9,18 +9,22 @@ import static com.martin.ads.connection.MatUtil.matInv;
 import static com.martin.ads.connection.MatUtil.matInv2;
 import static com.martin.ads.connection.MatUtil.matMul;
 import static com.martin.ads.connection.MatUtil.matRotate;
+import static com.martin.ads.connection.MatUtil.matToJson;
 
 import android.Manifest;
 import android.content.ComponentName;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
 
+import android.icu.util.Output;
+import android.net.InetAddresses;
 import android.net.wifi.WpsInfo;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
 import android.util.Log;
 import android.util.TimingLogger;
 import android.view.Menu;
@@ -64,10 +68,22 @@ import android.net.wifi.p2p.WifiP2pInfo;
 import android.content.ServiceConnection;
 import android.net.wifi.p2p.WifiP2pManager;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.martin.ads.connection.DeviceAdapter;
 import com.martin.ads.connection.DirectActionListener;
@@ -75,9 +91,11 @@ import com.martin.ads.connection.WifiClientTask;
 import com.martin.ads.connection.WifiServerService;
 import com.martin.ads.connection.WifiDirectBroadcastReceiver;
 // 2.28.2022 end
+import com.martin.ads.connection.LocalServerService;
+import com.martin.ads.connection.LocalClientService;
 
 public class ArCamUIActivity extends AppCompatActivity implements
-        CameraGLViewBase.CvCameraViewListener2, ActivityReceiver.Receiver {
+        CameraGLViewBase.CvCameraViewListener2 {
 
     // 2.28.2022 wifi p2p connection start
     private WifiP2pManager wifiP2pManager;
@@ -89,37 +107,17 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
     private List<WifiP2pDevice> wifiP2pDeviceList;
 
-
     private BroadcastReceiver broadcastReceiver;
 
-    private WifiServerService wifiServerService;
+    // private WifiServerService wifiServerService;
 
     private WifiP2pDevice mWifiP2pDevice;
 
-    // 3.3.2022 start for sender
     private boolean wifiP2pEnabled = false;
-    // 3.3.3033 end for sender
 
-    private static final int ADD_AR_OBJ = 1;
+    // private static final int ADD_AR_OBJ = 1;
 
     private int device_idx;
-
-    private final ServiceConnection serviceConnection = new ServiceConnection() {
-
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            WifiServerService.WifiServerBinder binder = (WifiServerService.WifiServerBinder) service;
-            wifiServerService = binder.getService();
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            if (wifiServerService != null) {
-                wifiServerService = null;
-            }
-            bindService();
-        }
-    };
 
     private final DirectActionListener directActionListener = new DirectActionListener() {
 
@@ -136,25 +134,15 @@ public class ArCamUIActivity extends AppCompatActivity implements
         @Override
         public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
             if (wifiP2pInfo.groupFormed) {
-                // for sender
-                // wifiP2pDeviceList.clear();
-
-                // sender 3.8.2022
-                // deviceAdapter.notifyDataSetChanged();
                 Log.e(TAG, "group formed");
+                ArCamUIActivity.this.wifiP2pInfo = wifiP2pInfo;
                 if (wifiP2pInfo.isGroupOwner) {
                     Log.e(TAG, "p2p receiver group owner");
-                    Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
+                    Log.e(TAG, wifiP2pInfo.groupOwnerAddress.getHostAddress());
                     connectionInfoAvailable = true;
                 } else {
                     Log.e(TAG, "p2p receiver not group owner");
-                }
-                // 5.24.2022
-                ArCamUIActivity.this.wifiP2pInfo = wifiP2pInfo;
-                if (wifiServerService != null) {
-                    Intent temp_intent = new Intent(ArCamUIActivity.this, WifiServerService.class);
-                    temp_intent.putExtra("receiverTag", mReceiver);
-                    startService(temp_intent);
+                    new Thread(new ThreadConnectGO()).start();
                 }
             }
         }
@@ -163,11 +151,9 @@ public class ArCamUIActivity extends AppCompatActivity implements
         public void onDisconnection() {
             // receiver:
             connectionInfoAvailable = false;
-
             // sender:
             wifiP2pDeviceList.clear();
             ArCamUIActivity.this.wifiP2pInfo = null;
-
             // 3.8.2022
             deviceAdapter.notifyDataSetChanged();
         }
@@ -183,7 +169,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
             ArCamUIActivity.this.wifiP2pDeviceList.clear();
             ArCamUIActivity.this.wifiP2pDeviceList.addAll(wifiP2pDeviceList);
 
-            // sender 3.8.2022
             deviceAdapter.notifyDataSetChanged();
         }
     };
@@ -210,22 +195,12 @@ public class ArCamUIActivity extends AppCompatActivity implements
         channel = wifiP2pManager.initialize(this, getMainLooper(), directActionListener);
         broadcastReceiver = new WifiDirectBroadcastReceiver(wifiP2pManager, channel, directActionListener);
         registerReceiver(broadcastReceiver, WifiDirectBroadcastReceiver.getIntentFilter());
-        bindService();
-
-        // 3.16.2022
+        /*
         mReceiver = new ActivityReceiver(new Handler());
         mReceiver.setReceiver(this);
-
+        */
         received = false;
-        clientAddressList = new ArrayList<>();
     }
-
-    // 2.28.2022 start
-    private void bindService() {
-        Intent intent = new Intent(ArCamUIActivity.this, WifiServerService.class);
-        bindService(intent, serviceConnection, BIND_AUTO_CREATE);
-    }
-    // 2.28.2022 end
 
     private void initToolbar() {
         Toolbar mToolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -257,10 +232,9 @@ public class ArCamUIActivity extends AppCompatActivity implements
         switch (item.getItemId()) {
             case R.id.context_menu:
                 detectPlane = true;
-                // 3.4.2022 start: notify peers that device adding AR obj
+                // 6.15.2022 start: notify peers that device adding AR obj
                 if (wifiP2pInfo != null) {
-                    Log.e(TAG, "GO address: " + wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
-                    // new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray);
+                    Log.e(TAG, "GO address: " + wifiP2pInfo.groupOwnerAddress.getHostAddress());
                 } else {
                     Toast.makeText(this, "wifiP2pInfo is null", Toast.LENGTH_SHORT).show();
                 }
@@ -269,10 +243,10 @@ public class ArCamUIActivity extends AppCompatActivity implements
 
             case R.id.menuCreateGroup:
                 Toast.makeText(this, "Create group...", Toast.LENGTH_SHORT).show();
+                socketMap = new HashMap<>();
                 if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                     return false;
                 }
-                long startTime_a2 = System.nanoTime();
                 // 5.26.2022
                 WifiP2pConfig ownerConfig = new WifiP2pConfig.Builder()
                         .setNetworkName("DIRECT-demo")
@@ -283,6 +257,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
                     @Override
                     public void onSuccess() {
                         Toast.makeText(ArCamUIActivity.this, "Create group success:", Toast.LENGTH_SHORT).show();
+                        new Thread(new ThreadGOAccept()).start();
                     }
 
                     @Override
@@ -290,29 +265,40 @@ public class ArCamUIActivity extends AppCompatActivity implements
                         Toast.makeText(ArCamUIActivity.this, "Create group fail", Toast.LENGTH_SHORT).show();
                     }
                 });
-                Log.e(TAG, "A2 phase Time: " + ((System.nanoTime()-startTime_a2)/1000000)+ "mS\n");
+                // 6.15.2022
                 break;
 
             case R.id.menuDirectDiscover:
-                Toast.makeText(this, "Searching peers...", Toast.LENGTH_SHORT).show();
-                wifiP2pDeviceList.clear();
-                deviceAdapter.notifyDataSetChanged();
-                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(ArCamUIActivity.this, "Need Permission on DirectDiscover", Toast.LENGTH_SHORT).show();
-                    return true;
-                }
-                wifiP2pManager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
-                    @Override
-                    public void onSuccess() {
-                        Toast.makeText(ArCamUIActivity.this, "Searching success", Toast.LENGTH_SHORT).show();
+                if(wifiP2pInfo != null && wifiP2pInfo.isGroupOwner) {
+                    Toast.makeText(this, "Stop joining and connect", Toast.LENGTH_SHORT).show();
+                    List<String> tempAddrList = new ArrayList<>(socketMap.keySet());
+                    Log.e(TAG, "list size: " + tempAddrList.size());
+                    for(Map.Entry<String, Socket> entry : socketMap.entrySet()) {
+                        List<String> tempList = new ArrayList<>(tempAddrList);
+                        tempList.remove(entry.getKey());
+                        new Thread(new ThreadSendAddress(entry.getValue(), entry.getKey(), tempList)).start();
                     }
+                } else {
+                    Toast.makeText(this, "Searching peers...", Toast.LENGTH_SHORT).show();
+                    wifiP2pDeviceList.clear();
+                    deviceAdapter.notifyDataSetChanged();
+                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        Toast.makeText(ArCamUIActivity.this, "Need Permission on DirectDiscover", Toast.LENGTH_SHORT).show();
+                        return true;
+                    }
+                    wifiP2pManager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
+                        @Override
+                        public void onSuccess() {
+                            Toast.makeText(ArCamUIActivity.this, "Searching success", Toast.LENGTH_SHORT).show();
+                        }
 
-                    @Override
-                    public void onFailure(int reason) {
-                        Toast.makeText(ArCamUIActivity.this, "Searching fail", Toast.LENGTH_SHORT).show();
-                    }
-                });
-                break;
+                        @Override
+                        public void onFailure(int reason) {
+                            Toast.makeText(ArCamUIActivity.this, "Searching fail", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                    break;
+                }
         }
         return super.onOptionsItemSelected(item);
     }
@@ -335,10 +321,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
     private float[] recvHostModel = new float[16];
 
     private boolean received;
-
-    // 3.15.2022 start
-
-    // 3.15.2022 end
 
     private CameraGLView mOpenCvCameraView;
     private boolean initFinished;
@@ -364,11 +346,9 @@ public class ArCamUIActivity extends AppCompatActivity implements
         initFinished = false;
 
         touchHelper = new TouchHelper(this);
-        long startTime_d = System.nanoTime();
         initGLES10Demo();
         //initGLES20Demo();
         initGLES20Obj();
-        Log.e(TAG, "D phase Time: " + ((System.nanoTime()-startTime_d)/1000000)+ "mS\n");
 
         View touchView = findViewById(R.id.touch_panel);
         touchView.setClickable(true);
@@ -396,7 +376,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
         RecyclerView rv_deviceList = findViewById(R.id.rv_deviceList);
         wifiP2pDeviceList = new ArrayList<>();
         deviceAdapter = new DeviceAdapter(wifiP2pDeviceList);
-
 
         rv_deviceList.setAdapter(deviceAdapter);
         rv_deviceList.setLayoutManager(new LinearLayoutManager(this));
@@ -457,12 +436,9 @@ public class ArCamUIActivity extends AppCompatActivity implements
                         .setArObjectView(glRootView)
                         .setNativeHelper(nativeHelper)
                         .setContext(this)
-                        /*
-                        .setObjPath("patrick.obj")
-                        .setTexturePath("Char_Patrick.png")
-                        .setInitSize(0.20f)
-
-                         */
+                        // .setObjPath("patrick.obj")
+                        // .setTexturePath("Char_Patrick.png")
+                        // .setInitSize(0.20f)
                         .setObjPath("andy.obj")
                         .setTexturePath("andy.png")
                         .setInitSize(1.0f)
@@ -496,12 +472,10 @@ public class ArCamUIActivity extends AppCompatActivity implements
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
 
+        clean();
+
         // 3.2.2022 start, receiver
-        if (wifiServerService != null) {
-            unbindService(serviceConnection);
-        }
         unregisterReceiver(broadcastReceiver);
-        stopService(new Intent(this, WifiServerService.class));
         if (connectionInfoAvailable) {
             removeGroup();
         }
@@ -543,6 +517,7 @@ public class ArCamUIActivity extends AppCompatActivity implements
     public float[] resolverViewInv;
     public float[] tempMat;
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     public Mat onCameraFrame(CameraGLViewBase.CvCameraViewFrame inputFrame) {
 
         if(received) {
@@ -570,29 +545,11 @@ public class ArCamUIActivity extends AppCompatActivity implements
                 // 4.2.2022 start
                 nativeHelper.getView(hostView);
                 nativeHelper.getModel(hostModel);
-                if(wifiP2pInfo != null) {
-                    Log.e(TAG, "Msg to resolver");
-                    if(wifiP2pInfo.isGroupOwner && !(clientAddressList.isEmpty())) {
-                        for(String addr : clientAddressList) {
-                            List<String> tempList = new ArrayList<>(clientAddressList);
-                            tempList.remove(addr);
-                            Log.e(TAG, "GO send to client");
-                            new WifiClientTask(this, ADD_AR_OBJ).execute(addr, mRgba, mGray, hostView, hostModel, tempList);
-                        }
-                    }
-                    if(!wifiP2pInfo.isGroupOwner) {
-                        List<String> tempList = new ArrayList<>(clientAddressList);
-                        tempList.add(wifiP2pInfo.groupOwnerAddress.getHostAddress());
-                        for(String addr : tempList) {
-                            Log.e(TAG, "address in list" + addr);
-                            new WifiClientTask(this, ADD_AR_OBJ).execute(addr, mRgba, mGray, hostView, hostModel, null);
-                        }
-                    }
-                    /*
-                    new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray, hostView, hostModel);
-                    */
+                for(Map.Entry<String, Socket> entry : socketMap.entrySet()) {
+                    new Thread(new ThreadSendData(entry.getValue(), mRgba, mGray, hostView, hostModel, entry.getKey())).start();
                 }
-
+                // new Thread(new ThreadSend(mRgba, mGray, hostView, hostModel)).start();
+                // new WifiClientTask(this, ADD_AR_OBJ).execute(wifiP2pInfo.groupOwnerAddress.getHostAddress(), mRgba, mGray, hostView, hostModel);
                 Log.e(TAG, "1D phase Time: " + ((System.nanoTime()-startTime)/1000000)+ "mS\n");
             }
 
@@ -641,14 +598,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
             Toast.makeText(ArCamUIActivity.this, "need permission in connect()", Toast.LENGTH_SHORT).show();
             return;
         }
-        long startTime_1a = System.nanoTime();
-        /*
-        WifiP2pConfig config = new WifiP2pConfig();
-        config.deviceAddress = mWifiP2pDevice.deviceAddress;
-        config.wps.setup = WpsInfo.PBC;
-        */
-
-        // WifiP2pConfig config = new WifiP2pConfig.Builder().setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_5GHZ).build();
 
         WifiP2pConfig config = new WifiP2pConfig.Builder()
                 .setNetworkName("DIRECT-demo")
@@ -658,14 +607,12 @@ public class ArCamUIActivity extends AppCompatActivity implements
         config.deviceAddress = mWifiP2pDevice.deviceAddress;
         config.wps.setup = WpsInfo.PBC;
 
-
         if (config.deviceAddress != null && mWifiP2pDevice != null) {
             wifiP2pManager.connect(channel, config, new WifiP2pManager.ActionListener() {
 
                 @Override
                 public void onSuccess() {
                     Toast.makeText(ArCamUIActivity.this, "connect success", Toast.LENGTH_SHORT).show();
-                    Log.e(TAG, "1A phase Time: " + ((System.nanoTime()-startTime_1a)/1000000)+ "mS\n");
                 }
 
                 @Override
@@ -676,14 +623,12 @@ public class ArCamUIActivity extends AppCompatActivity implements
         } else {
             Toast.makeText(ArCamUIActivity.this, "no connection", Toast.LENGTH_SHORT).show();
         }
-
     }
 
     // 3.3.2022 end
     // 3.16.2022 start
+    /*
     public ActivityReceiver mReceiver;
-    public String clientAddress;
-    public List<String> clientAddressList;
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
@@ -693,18 +638,6 @@ public class ArCamUIActivity extends AppCompatActivity implements
         String matGrayString = resultData.getString("Mat gray String");
         String[] recViewStrArr = resultData.getStringArray("hostView String arr");
         String[] recModelStrArr = resultData.getStringArray("hostModel String arr");
-        clientAddress = resultData.getString("client address");
-        if(wifiP2pInfo.isGroupOwner) {
-            Log.e(TAG, "client address: " + clientAddress);
-            if(!clientAddressList.contains(clientAddress))
-                clientAddressList.add(clientAddress);
-        } else {
-            if(clientAddress.equals(wifiP2pInfo.groupOwnerAddress.getHostAddress())) {
-                clientAddressList = resultData.getStringArrayList("client address list");
-                if(clientAddressList != null && clientAddressList.size() > 0)
-                    Log.e(TAG, "another client: " + clientAddressList.get(0));
-            }
-        }
 
         recRgba = matFromJson(matRgbaString);
         recGray = matFromJson(matGrayString);
@@ -721,5 +654,319 @@ public class ArCamUIActivity extends AppCompatActivity implements
             recvHostModel[i] = Float.parseFloat(recModelStrArr[i]);
 
         received = true;
+    }
+    */
+
+    ServerSocket serverSocket;
+    Socket client;
+    int SERVER_PORT = 1995;
+    OutputStream outputStream;
+    ObjectOutputStream objectOutputStream;
+    InputStream inputStream;
+    ObjectInputStream objectInputStream;
+
+    Map<String, Socket> socketMap;
+
+    // GO will run once GO is set
+    class ThreadGOAccept implements Runnable {
+        @Override
+        public void run() {
+            try {
+                serverSocket = new ServerSocket();
+                serverSocket.setReuseAddress(true);
+                serverSocket.bind(new InetSocketAddress(SERVER_PORT));
+                while(true) {
+                    client = serverSocket.accept();
+                    socketMap.put(client.getInetAddress().getHostAddress(), client);
+                    Log.e(TAG, "client: " + client.getInetAddress().getHostAddress());
+                    ClientHandler clientHandler = new ClientHandler(client);
+                    new Thread(clientHandler).start();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage());
+            }
+        }
+    }
+
+    // thread listen for data receive
+    class ClientHandler implements Runnable {
+        Socket clientSocket;
+        InputStream myInputStream;
+        ObjectInputStream myObjectInputStream;
+
+        public ClientHandler(Socket socket) {
+            this.clientSocket = socket;
+        }
+
+        @RequiresApi(api = Build.VERSION_CODES.O)
+        @Override
+        public void run() {
+            try {
+                Log.e(TAG, "client handler start");
+                this.myInputStream = this.clientSocket.getInputStream();
+                this.myObjectInputStream = new ObjectInputStream(this.myInputStream);
+                while(true) {
+                    matRgbaString = (String) this.myObjectInputStream.readObject();
+                    matGrayString = (String) this.myObjectInputStream.readObject();
+                    recRgba = matFromJson(matRgbaString);
+                    recGray = matFromJson(matGrayString);
+                    for(int i = 0; i < 16; i ++) {
+                        strRecvHostView[i] = (String) myObjectInputStream.readObject();
+                        recvHostView[i] = Float.parseFloat(strRecvHostView[i]);
+                    }
+                    for(int i = 0; i < 16; i ++) {
+                        strRecvHostModel[i] = (String) myObjectInputStream.readObject();
+                        recvHostModel[i] = Float.parseFloat(strRecvHostModel[i]);
+                    }
+                    received = true;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage());
+            }
+        }
+    }
+
+    String GOAddress;
+
+    Socket clientToGO;
+
+    // client run once client connect to GO
+    // this thread starts in class ThreadConnectGO
+    class ThreadClientAccept implements Runnable {
+
+        @Override
+        public void run() {
+            try {
+                serverSocket = new ServerSocket();
+                serverSocket.setReuseAddress(true);
+                serverSocket.bind(new InetSocketAddress(SERVER_PORT));
+                while(true) {
+                    Socket client = serverSocket.accept();
+                    socketMap.put(client.getInetAddress().getHostAddress(), client);
+                    Log.e(TAG, client.getInetAddress().getHostAddress());
+                    ClientHandler clientHandler = new ClientHandler(client);
+                    new Thread(clientHandler).start();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage());
+            }
+        }
+    }
+
+    // client run once data info available
+    class ThreadConnectGO implements Runnable {
+
+        @Override
+        public void run() {
+            socketMap = new HashMap<>();
+            try {
+                clientToGO = new Socket();
+                clientToGO.setTcpNoDelay(true);
+                clientToGO.bind(null);
+                GOAddress = wifiP2pInfo.groupOwnerAddress.getHostAddress();
+                Log.e(TAG, "client connect to: " + GOAddress);
+                clientToGO.connect((new InetSocketAddress(GOAddress, SERVER_PORT)), 10000);
+                socketMap.put(GOAddress, clientToGO);
+                Log.e(TAG, "add address: " + GOAddress);
+                new Thread(new ClientAddressHandler(clientToGO)).start();
+                new Thread(new ThreadClientAccept()).start();
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage());
+            }
+
+        }
+    }
+
+    List<String> otherClientAddrStringList;
+
+    class ClientAddressHandler implements Runnable {
+
+        Socket myGOSocket;
+        InputStream myGOInputStream;
+        ObjectInputStream myObjectGOInputStream;
+
+        public ClientAddressHandler(Socket socketGO) {
+            this.myGOSocket = socketGO;
+        }
+
+        @Override
+        public void run() {
+            try {
+                Log.e(TAG, "Address handler start");
+                this.myGOInputStream = this.myGOSocket.getInputStream();
+                this.myObjectGOInputStream = new ObjectInputStream(this.myGOInputStream);
+                String myAddr = (String) myObjectGOInputStream.readObject();
+                otherClientAddrStringList = (List<String>) myObjectGOInputStream.readObject();
+                // call threadConnectClient, use str.compareTo(Str)
+                for(String clientAddr : otherClientAddrStringList) {
+                    Log.e(TAG, "clientAddressHandler: " + clientAddr);
+                    if(myAddr.compareTo(clientAddr) > 0)
+                        new Thread(new ThreadConnectClient(clientAddr)).start();
+                    else
+                        Log.e(TAG, "MyAddr: " + myAddr);
+                }
+                new Thread(new ClientHandler(this.myGOSocket)).start();
+                Log.e(TAG, "Address handler end");
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage());
+            }
+        }
+    }
+
+    class ThreadConnectClient implements Runnable {
+
+        String myClientServerAddr;
+
+        Socket myClient;
+
+        public ThreadConnectClient(String clientServerAddr) {
+            this.myClientServerAddr = clientServerAddr;
+        }
+
+        @Override
+        public void run() {
+            try {
+                this.myClient = new Socket();
+                this.myClient.setTcpNoDelay(true);
+                this.myClient.bind(null);
+                Log.e(TAG, "client connect to: " + this.myClientServerAddr);
+                this.myClient.connect((new InetSocketAddress(this.myClientServerAddr, SERVER_PORT)), 10000);
+                socketMap.put(this.myClientServerAddr, this.myClient);
+                Log.e(TAG, "add address: " + this.myClientServerAddr);
+                new Thread(new ClientHandler(this.myClient)).start();
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage());
+            }
+
+        }
+    }
+
+    String matRgbaString;
+    String matGrayString;
+    String[] strRecvHostView = new String[16];
+    String[] strRecvHostModel = new String[16];
+
+    // make new thread send handler
+
+    class ThreadSendAddress implements Runnable {
+
+        List<String> myInputList;
+        String deviceAddr;
+        Socket mySocket;
+
+        public ThreadSendAddress(Socket socket, String deviceAddr, List<String> list) {
+            this.mySocket = socket;
+            this.myInputList = list;
+            this.deviceAddr = deviceAddr;
+        }
+
+        @Override
+        public void run() {
+            try {
+                Log.e(TAG, "send address start");
+                OutputStream myOutputStream = this.mySocket.getOutputStream();
+                ObjectOutputStream myObjectOutputStream = new ObjectOutputStream(myOutputStream);
+                myObjectOutputStream.writeObject(this.deviceAddr);
+                myObjectOutputStream.writeObject(this.myInputList);
+                Log.e(TAG, "send address end");
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage());
+            }
+        }
+    }
+
+    class ThreadSendData implements Runnable {
+
+        Socket mySocket;
+        String mySendMatRgbaString;
+        String mySendMatGrayString;
+        String[] mySendHostViewArray;
+        String[] mySendHostModelArray;
+        String logAddr;
+
+        @RequiresApi(api = Build.VERSION_CODES.O)
+        public ThreadSendData(Socket socket, Mat sendRgb, Mat sendGray, float[] sendView, float[] sendModel, String addr) {
+            this.mySocket = socket;
+            this.mySendMatRgbaString = matToJson(sendRgb);
+            this.mySendMatGrayString = matToJson(sendGray);
+            this.mySendHostViewArray = new String[16];
+            this.mySendHostModelArray = new String[16];
+            for(int i = 0; i < 16; i ++)
+                this.mySendHostViewArray[i] = String.valueOf(sendView[i]);
+            for(int i = 0; i < 16; i ++)
+                this.mySendHostModelArray[i] = String.valueOf(sendModel[i]);
+            this.logAddr = addr;
+        }
+
+        @Override
+        public void run() {
+            try {
+                Log.e(TAG, "send data start");
+                OutputStream outputStream = this.mySocket.getOutputStream();
+                ObjectOutputStream objectOutputStream = new ObjectOutputStream(outputStream);
+                objectOutputStream.writeObject(this.mySendMatRgbaString);
+                objectOutputStream.writeObject(this.mySendMatGrayString);
+                for(String s : this.mySendHostViewArray) {
+                    objectOutputStream.writeObject(s);
+                }
+                for(String s : this.mySendHostModelArray) {
+                    objectOutputStream.writeObject(s);
+                }
+                Log.e(TAG, "send data end");
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage() + this.logAddr);
+            }
+        }
+    }
+
+
+    private void clean() {
+        if (serverSocket != null && !serverSocket.isClosed()) {
+            try {
+                serverSocket.close();
+                serverSocket = null;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else if(client != null && !client.isClosed()) {
+            try {
+                client.close();
+                client = null;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        if (inputStream != null) {
+            try {
+                inputStream.close();
+                inputStream = null;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        if (objectInputStream != null) {
+            try {
+                objectInputStream.close();
+                objectInputStream = null;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        if (outputStream != null) {
+            try {
+                outputStream.close();
+                outputStream = null;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        if (objectOutputStream != null) {
+            try {
+                objectOutputStream.close();
+                objectOutputStream = null;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
